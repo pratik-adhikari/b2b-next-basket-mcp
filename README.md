@@ -92,7 +92,7 @@ Runs the prediction backend through normal Python functions. This should work be
 PYTHONPATH=src python scripts/run_mcp_server.py
 ```
 
-Starts the MCP server over stdio. It may look idle because it waits for an MCP client.
+Starts the MCP server over stdio and prints a short human-readable status banner to `stderr` during manual direct runs. Standard output remains reserved for MCP protocol traffic. The server waits for MCP client JSON-RPC messages on stdin/stdout, so appearing idle is normal until a client connects. The model is loaded lazily on the first tool call, not when the server module is imported. Direct server runs are mainly useful for MCP host integration or low-level debugging; for normal testing, use `scripts/mcp_dev_client.py`. The dev client suppresses the direct-run banner in its server subprocess to keep client output clean. Press `Ctrl+C` once to stop a direct run. The wrapper uses a forced exit to avoid stdin background-thread shutdown noise from the stdio runtime.
 
 ## Test with a small MCP client
 
@@ -119,4 +119,3 @@ Model backend = computes prediction
 MCP server = exposes safe, typed, agent-callable tools
 LLM/client = chooses and calls tools, then explains results
 ```
-

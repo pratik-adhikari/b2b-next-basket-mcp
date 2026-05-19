@@ -15,8 +15,16 @@ from b2b_next_basket_mcp.token_utils import (
 
 mcp = FastMCP("b2b-next-basket-prediction")
 
-# Load model/dataset once at server startup.
-predictor = OrderPredictor()
+_predictor: OrderPredictor | None = None
+
+
+def get_predictor() -> OrderPredictor:
+    global _predictor
+    # Lazy loading keeps MCP server import lightweight, avoids heavy model
+    # construction during import, and improves direct Ctrl+C behavior.
+    if _predictor is None:
+        _predictor = OrderPredictor()
+    return _predictor
 
 
 @mcp.tool()
@@ -24,6 +32,7 @@ def list_clients(limit: int = 20) -> dict[str, Any]:
     """List available B2B client IDs in the local demo dataset."""
     if limit < 1 or limit > 200:
         raise ValueError("limit must be between 1 and 200.")
+    predictor = get_predictor()
     clients = predictor.list_clients()
     return {
         "total_clients": len(clients),
@@ -34,6 +43,7 @@ def list_clients(limit: int = 20) -> dict[str, Any]:
 @mcp.tool()
 def get_sample_history(client_id: str) -> dict[str, Any]:
     """Return a compact summary of one sample historical order sequence."""
+    predictor = get_predictor()
     history = predictor.get_sample_history(client_id)
     preview = compact_token_preview(history)
     return {
@@ -53,6 +63,7 @@ def get_sample_history(client_id: str) -> dict[str, Any]:
 @mcp.tool()
 def get_prediction_input_sample(client_id: str) -> dict[str, Any]:
     """Return full raw history for dev/demo prediction input, not normal display output."""
+    predictor = get_predictor()
     history = predictor.get_sample_history(client_id)
     return {
         "client_id": client_id,
@@ -74,6 +85,7 @@ def predict_next_basket(
     top_k: int = 20,
 ) -> dict[str, Any]:
     """Predict the next likely B2B order basket for a selected client."""
+    predictor = get_predictor()
     result = predictor.predict_next_basket(
         client_id=client_id,
         start_text=start_text,
@@ -150,6 +162,8 @@ def model_card() -> str:
 
 
 def main() -> None:
+    # Stdio MCP servers may appear idle when run directly because they wait
+    # for protocol messages from a client on stdin/stdout.
     mcp.run()
 
 

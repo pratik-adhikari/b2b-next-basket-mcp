@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -65,10 +66,14 @@ async def call_tool_payload(
 
 async def main() -> None:
     """Run an end-to-end MCP demo against the local next-basket server."""
+    server_env = os.environ.copy()
+    server_env["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+    server_env["B2B_MCP_SUPPRESS_BANNER"] = "1"
+
     server_params = StdioServerParameters(
         command=sys.executable,
         args=[str(PROJECT_ROOT / "scripts" / "run_mcp_server.py")],
-        env={"PYTHONPATH": str(PROJECT_ROOT / "src")},
+        env=server_env,
     )
 
     async with stdio_client(server_params) as (read, write):
