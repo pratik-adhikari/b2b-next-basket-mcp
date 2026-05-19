@@ -1,0 +1,26 @@
+.venv/
+.codex/
+.agents/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dll
+*.dylib
+
+# NDA/proprietary files: keep local, do not commit
+data/
+data/model.onnx
+data/dataset.joblib
+vendor/
+vendor/protected_backend.py
+vendor/protected_runtime/
+vendor/pyarmor_runtime_000000/
+*.onnx
+*.joblib
+
+.ipynb_checkpoints/
+.env
+.env.*
+.DS_Store
