@@ -53,6 +53,7 @@ Examples in this project:
 - `get_prediction_input_sample`
 - `predict_next_basket`
 - `recommend_next_action`
+- `get_account_reorder_brief`
 
 ### MCP resource
 
@@ -135,6 +136,10 @@ In this repo, the main tools are:
   - calls the inference layer and returns predicted tokens plus readable fields
 - `recommend_next_action`
   - calls prediction first, then turns the result into a recommendation-only business action
+- `get_account_reorder_brief`
+  - the sales-facing MCP tool that wraps lower-level prediction and recommendation steps into one account brief
+
+The lower-level tools are still useful for development, debugging, and MCP learning. `get_account_reorder_brief` exists to expose a higher-level business-facing interface on top of them.
 
 The important idea is that MCP tools are not separate from Python code. They are normal Python functions with an MCP exposure layer on top.
 
@@ -192,6 +197,8 @@ Better pattern:
   "note": "..."
 }
 ```
+
+`get_account_reorder_brief` follows this pattern deliberately. It exposes fields such as `reason_codes`, `evidence_summary`, `model_signals`, and `limitations` instead of hidden chain-of-thought. That keeps the tool inspectable and useful without pretending to expose internal reasoning.
 
 ## Safety boundary
 

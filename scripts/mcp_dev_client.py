@@ -165,6 +165,20 @@ async def main() -> None:
             print_section("SAFETY")
             print(recommendation["safety"])
 
+            reorder_brief = await call_tool_payload(
+                session,
+                "get_account_reorder_brief",
+                {
+                    "client_id": DEMO_CLIENT_ID,
+                    "detail_level": "sales_summary",
+                    "include_raw_tokens": False,
+                    "include_evidence": True,
+                    "include_talking_points": True,
+                },
+            )
+            print_section("ACCOUNT REORDER BRIEF")
+            print(json.dumps(reorder_brief, indent=2))
+
 
 if __name__ == "__main__":
     asyncio.run(main())
