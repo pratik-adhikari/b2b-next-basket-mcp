@@ -10,6 +10,7 @@ from b2b_next_basket_mcp.token_utils import (
     compact_token_preview,
     extract_time_prediction,
     readable_items_from_tokens,
+    split_tokens,
 )
 
 mcp = FastMCP("b2b-next-basket-prediction")
@@ -45,6 +46,21 @@ def get_sample_history(client_id: str) -> dict[str, Any]:
         "note": (
             "Sample history is intentionally compact for demos. "
             "Use the full raw sequence internally when passing history into prediction."
+        ),
+    }
+
+
+@mcp.tool()
+def get_prediction_input_sample(client_id: str) -> dict[str, Any]:
+    """Return full raw history for dev/demo prediction input, not normal display output."""
+    history = predictor.get_sample_history(client_id)
+    return {
+        "client_id": client_id,
+        "start_text": history,
+        "total_tokens": len(split_tokens(history)),
+        "note": (
+            "This full raw sequence exists only to seed prediction during local demos "
+            "and development. Prefer get_sample_history for readable display output."
         ),
     }
 
