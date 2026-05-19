@@ -6,7 +6,11 @@ from mcp.server.fastmcp import FastMCP
 
 from b2b_next_basket_mcp.business_logic import make_sales_recommendation
 from b2b_next_basket_mcp.inference import OrderPredictor
-from b2b_next_basket_mcp.token_utils import extract_time_prediction, readable_items_from_tokens
+from b2b_next_basket_mcp.token_utils import (
+    compact_token_preview,
+    extract_time_prediction,
+    readable_items_from_tokens,
+)
 
 mcp = FastMCP("b2b-next-basket-prediction")
 
@@ -28,11 +32,20 @@ def list_clients(limit: int = 20) -> dict[str, Any]:
 
 @mcp.tool()
 def get_sample_history(client_id: str) -> dict[str, Any]:
-    """Return one sample historical order-token sequence for a selected client."""
+    """Return a compact summary of one sample historical order sequence."""
     history = predictor.get_sample_history(client_id)
+    preview = compact_token_preview(history)
     return {
         "client_id": client_id,
-        "sample_history": history,
+        "total_tokens": preview["total_tokens"],
+        "estimated_order_events": preview["estimated_order_events"],
+        "preview_start": preview["preview_start"],
+        "recent_history": preview["recent_history"],
+        "full_history_available": False,
+        "note": (
+            "Sample history is intentionally compact for demos. "
+            "Use the full raw sequence internally when passing history into prediction."
+        ),
     }
 
 
