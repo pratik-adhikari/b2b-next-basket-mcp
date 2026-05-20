@@ -110,6 +110,14 @@ PYTHONPATH=src python scripts/mcp_dev_client.py
 
 Starts the MCP server as a subprocess, lists tools, calls `list_clients`, then calls a prediction/recommendation flow.
 
+## Sales demo client
+
+```bash
+PYTHONPATH=src python scripts/mcp_sales_demo_client.py
+```
+
+Runs a short pitch-friendly MCP demo that calls the sales-facing `get_account_reorder_brief` tool and prints only the readable account brief.
+
 ## First-principles lesson
 
 The prediction model is not the product interface.
