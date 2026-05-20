@@ -28,6 +28,49 @@ def get_predictor() -> OrderPredictor:
     return _predictor
 
 
+@mcp.tool()
+def get_server_capabilities() -> dict[str, Any]:
+    """Describe this MCP server's tools, defaults, and safety boundaries."""
+    return {
+        "ok": True,
+        "server_name": "b2b-next-basket-prediction",
+        "purpose": (
+            "Expose local next-basket prediction and recommendation capabilities "
+            "through MCP tools for demos and learning."
+        ),
+        "model_loading_behavior": "Model and dataset load lazily on first prediction-related tool call.",
+        "default_generation_parameters": {
+            "max_generate": 20,
+            "temperature": 1.0,
+            "top_k": 20,
+            "sensor_size": 128,
+            "seed": 42,
+        },
+        "available_tools": [
+            "list_clients",
+            "get_sample_history",
+            "get_prediction_input_sample",
+            "predict_next_basket",
+            "recommend_next_action",
+            "get_account_reorder_brief",
+            "get_server_capabilities",
+        ],
+        "recommended_sales_tool": "get_account_reorder_brief",
+        "safety_boundaries": {
+            "recommendation_only": True,
+            "no_automatic_customer_contact": True,
+            "no_automatic_order_placement": True,
+            "no_raw_database_access": True,
+            "human_approval_required": True,
+        },
+        "notes": [
+            "stdout is reserved for MCP protocol in stdio mode",
+            "direct server run waits for an MCP client",
+            "model loads lazily on first prediction-related tool call",
+        ],
+    }
+
+
 def _make_reason_codes(
     readable_items: list[str],
     time_prediction: str | None,

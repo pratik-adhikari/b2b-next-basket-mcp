@@ -54,6 +54,7 @@ Examples in this project:
 - `predict_next_basket`
 - `recommend_next_action`
 - `get_account_reorder_brief`
+- `get_server_capabilities`
 
 ### MCP resource
 
@@ -138,6 +139,8 @@ In this repo, the main tools are:
   - calls prediction first, then turns the result into a recommendation-only business action
 - `get_account_reorder_brief`
   - the sales-facing MCP tool that wraps lower-level prediction and recommendation steps into one account brief
+- `get_server_capabilities`
+  - describes the server purpose, default generation parameters, available tools, and safety boundaries
 
 The lower-level tools are still useful for development, debugging, and MCP learning. `get_account_reorder_brief` exists to expose a higher-level business-facing interface on top of them.
 
@@ -199,6 +202,8 @@ Better pattern:
 ```
 
 `get_account_reorder_brief` follows this pattern deliberately. It exposes fields such as `reason_codes`, `evidence_summary`, `model_signals`, and `limitations` instead of hidden chain-of-thought. That keeps the tool inspectable and useful without pretending to expose internal reasoning.
+
+Server configuration and capabilities are also exposed through MCP tools and resources, not startup stdout logs. In stdio mode, stdout belongs to the MCP protocol, so clients should call `get_server_capabilities` or read MCP resources when they need server context.
 
 ## Safety boundary
 

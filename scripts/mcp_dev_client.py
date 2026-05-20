@@ -85,6 +85,14 @@ async def main() -> None:
             for tool in tools.tools:
                 print(f"- {tool.name}: {tool.description}")
 
+            capabilities = await call_tool_payload(
+                session,
+                "get_server_capabilities",
+                {},
+            )
+            print_section("SERVER CAPABILITIES")
+            print(json.dumps(capabilities, indent=2))
+
             clients = await call_tool_payload(session, "list_clients", {"limit": 5})
             print_section("CLIENTS")
             print(f"total_clients: {clients['total_clients']}")
