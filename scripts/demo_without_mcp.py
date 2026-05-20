@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from b2b_next_basket_mcp.business_logic import make_sales_recommendation
 from b2b_next_basket_mcp.inference import OrderPredictor
-from b2b_next_basket_mcp.token_utils import (
+from b2b_next_basket_mcp.utils.token_utils import (
     compact_token_preview,
     extract_time_prediction,
     readable_items_from_tokens,
