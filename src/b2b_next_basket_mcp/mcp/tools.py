@@ -4,17 +4,34 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from b2b_next_basket_mcp.business_logic import make_sales_recommendation
-from b2b_next_basket_mcp.inference import OrderPredictor
+from b2b_next_basket_mcp.backend.predictor import OrderPredictor
+from b2b_next_basket_mcp.business.evidence import (
+    _generation_parameters_fallback,
+    _make_evidence_summary,
+    _make_limitations,
+    _make_model_signals,
+    _make_reason_codes,
+)
+from b2b_next_basket_mcp.business.sales_brief import (
+    _make_talking_points,
+    make_sales_recommendation,
+)
+from b2b_next_basket_mcp.business.safety import _make_reorder_safety
+from b2b_next_basket_mcp.config import (
+    ALLOWED_DETAIL_LEVELS,
+    DEFAULT_MAX_GENERATE,
+    DEFAULT_SEED,
+    DEFAULT_SENSOR_SIZE,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_TOP_K,
+    SERVER_NAME,
+)
 from b2b_next_basket_mcp.utils.token_utils import (
     compact_token_preview,
     extract_time_prediction,
     readable_items_from_tokens,
     split_tokens,
 )
-
-mcp = FastMCP("b2b-next-basket-prediction")
-ALLOWED_DETAIL_LEVELS = ("compact", "sales_summary", "technical_debug")
 
 _predictor: OrderPredictor | None = None
 
@@ -28,23 +45,22 @@ def get_predictor() -> OrderPredictor:
     return _predictor
 
 
-@mcp.tool()
 def get_server_capabilities() -> dict[str, Any]:
     """Describe this MCP server's tools, defaults, and safety boundaries."""
     return {
         "ok": True,
-        "server_name": "b2b-next-basket-prediction",
+        "server_name": SERVER_NAME,
         "purpose": (
             "Expose local next-basket prediction and recommendation capabilities "
             "through MCP tools for demos and learning."
         ),
         "model_loading_behavior": "Model and dataset load lazily on first prediction-related tool call.",
         "default_generation_parameters": {
-            "max_generate": 20,
-            "temperature": 1.0,
-            "top_k": 20,
-            "sensor_size": 128,
-            "seed": 42,
+            "max_generate": DEFAULT_MAX_GENERATE,
+            "temperature": DEFAULT_TEMPERATURE,
+            "top_k": DEFAULT_TOP_K,
+            "sensor_size": DEFAULT_SENSOR_SIZE,
+            "seed": DEFAULT_SEED,
         },
         "available_tools": [
             "list_clients",
@@ -71,99 +87,6 @@ def get_server_capabilities() -> dict[str, Any]:
     }
 
 
-def _make_reason_codes(
-    readable_items: list[str],
-    time_prediction: str | None,
-    history_token_count: int,
-) -> list[str]:
-    reason_codes = ["ACCOUNT_HISTORY_AVAILABLE", "MODEL_GENERATED_REORDER_SIGNAL"]
-    if history_token_count > 0:
-        reason_codes.append("HISTORY_SEQUENCE_USED")
-    if readable_items:
-        reason_codes.append("PREDICTED_ITEMS_AVAILABLE")
-    else:
-        reason_codes.append("NO_CLEAR_ITEM_PREDICTION")
-    if time_prediction:
-        reason_codes.append("TIMING_SIGNAL_PRESENT")
-    return reason_codes
-
-
-def _make_evidence_summary(
-    readable_items: list[str],
-    time_prediction: str | None,
-    history_preview: dict[str, str | int],
-) -> str:
-    item_preview = ", ".join(readable_items[:5]) if readable_items else "no clear item set"
-    timing_part = time_prediction or "no explicit timing token"
-    return (
-        f"Brief built from a sample account history with "
-        f"{history_preview['estimated_order_events']} estimated order events and "
-        f"{history_preview['total_tokens']} total tokens. Model surfaced {item_preview} "
-        f"with timing signal: {timing_part}."
-    )
-
-
-def _generation_parameters_fallback() -> dict[str, Any]:
-    return {
-        "max_generate": 20,
-        "temperature": 1.0,
-        "top_k": 20,
-        "source": "account_brief_defaults",
-    }
-
-
-def _make_model_signals(
-    prediction: dict[str, Any],
-    time_prediction: str | None,
-    history_token_count: int,
-) -> dict[str, Any]:
-    return {
-        "history_token_count": history_token_count,
-        "predicted_token_count": len(prediction["predicted_tokens"]),
-        "time_signal_present": time_prediction is not None,
-        "generated_item_count": len(prediction["readable_items"]),
-        "generation_parameters": prediction.get(
-            "generation_parameters",
-            _generation_parameters_fallback(),
-        ),
-    }
-
-
-def _make_limitations() -> list[str]:
-    return [
-        "This brief is based on one sample history sequence, not a full account review.",
-        "The output is recommendation-only and does not place orders or contact customers.",
-        "Readable item names are simplified token conversions and may need human interpretation.",
-        "No calibrated probability or confidence score is exposed by this demo tool.",
-    ]
-
-
-def _make_talking_points(
-    client_id: str,
-    readable_items: list[str],
-    time_prediction: str | None,
-) -> list[str]:
-    top_items = ", ".join(readable_items[:3]) if readable_items else "core replenishment needs"
-    talking_points = [
-        f"Open with a reorder check-in for account {client_id}.",
-        f"Lead with likely replenishment areas: {top_items}.",
-    ]
-    if time_prediction:
-        talking_points.append(f"Use the timing signal to frame urgency: {time_prediction}.")
-    talking_points.append("Keep the conversation recommendation-only until a human confirms next steps.")
-    return talking_points
-
-
-def _make_reorder_safety() -> dict[str, bool]:
-    return {
-        "recommendation_only": True,
-        "requires_human_approval": True,
-        "can_contact_customer_automatically": False,
-        "can_place_order_automatically": False,
-    }
-
-
-@mcp.tool()
 def list_clients(limit: int = 20) -> dict[str, Any]:
     """List available B2B client IDs in the local demo dataset."""
     if limit < 1 or limit > 200:
@@ -176,7 +99,6 @@ def list_clients(limit: int = 20) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
 def get_sample_history(client_id: str) -> dict[str, Any]:
     """Return a compact summary of one sample historical order sequence."""
     predictor = get_predictor()
@@ -196,7 +118,6 @@ def get_sample_history(client_id: str) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
 def get_prediction_input_sample(client_id: str) -> dict[str, Any]:
     """Return full raw history for dev/demo prediction input, not normal display output."""
     predictor = get_predictor()
@@ -212,13 +133,12 @@ def get_prediction_input_sample(client_id: str) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
 def predict_next_basket(
     client_id: str,
     start_text: str,
     max_generate: int = 30,
-    temperature: float = 1.0,
-    top_k: int = 20,
+    temperature: float = DEFAULT_TEMPERATURE,
+    top_k: int = DEFAULT_TOP_K,
 ) -> dict[str, Any]:
     """Predict the next likely B2B order basket for a selected client."""
     predictor = get_predictor()
@@ -241,13 +161,12 @@ def predict_next_basket(
     }
 
 
-@mcp.tool()
 def recommend_next_action(
     client_id: str,
     start_text: str,
     max_generate: int = 30,
-    temperature: float = 1.0,
-    top_k: int = 20,
+    temperature: float = DEFAULT_TEMPERATURE,
+    top_k: int = DEFAULT_TOP_K,
 ) -> dict[str, Any]:
     """Predict the next basket and convert it into a safe sales recommendation."""
     prediction = predict_next_basket(
@@ -270,10 +189,9 @@ def recommend_next_action(
     }
 
 
-@mcp.tool()
 def get_account_reorder_brief(
     client_id: str,
-    detail_level: str = "sales_summary",
+    detail_level: str = ALLOWED_DETAIL_LEVELS[1],
     include_raw_tokens: bool = False,
     include_evidence: bool = True,
     include_talking_points: bool = True,
@@ -296,9 +214,9 @@ def get_account_reorder_brief(
     prediction = predictor.predict_next_basket(
         client_id=client_id,
         start_text=history,
-        max_generate=20,
-        temperature=1.0,
-        top_k=20,
+        max_generate=DEFAULT_MAX_GENERATE,
+        temperature=DEFAULT_TEMPERATURE,
+        top_k=DEFAULT_TOP_K,
     )
     readable_items = readable_items_from_tokens(prediction["predicted_tokens"])
     time_prediction = extract_time_prediction(prediction["predicted_tokens"])
@@ -338,7 +256,7 @@ def get_account_reorder_brief(
     )
     safety = _make_reorder_safety()
 
-    if detail_level == "compact":
+    if detail_level == ALLOWED_DETAIL_LEVELS[0]:
         return {
             "ok": True,
             "client_id": client_id,
@@ -362,7 +280,7 @@ def get_account_reorder_brief(
     if include_talking_points:
         sales_brief["talking_points"] = talking_points
 
-    if detail_level == "sales_summary":
+    if detail_level == ALLOWED_DETAIL_LEVELS[1]:
         response: dict[str, Any] = {
             "ok": True,
             "client_id": client_id,
@@ -396,38 +314,11 @@ def get_account_reorder_brief(
     return debug_response
 
 
-@mcp.resource("b2b://model-card/next-basket-prediction")
-def model_card() -> str:
-    return """
-    Model: B2B next-basket order prediction
-
-    Purpose:
-    Predict likely next products/items for a selected B2B client based on historical order-token sequences.
-
-    Inputs:
-    - client_id
-    - historical order sequence
-    - generation parameters such as top_k and temperature
-
-    Outputs:
-    - predicted product tokens
-    - readable item names
-    - optional timing token
-    - safe sales recommendation
-
-    Safety:
-    - This server provides recommendation-only output.
-    - It does not place orders.
-    - It does not contact customers.
-    - Human approval is required before business action.
-    """
-
-
-def main() -> None:
-    # Stdio MCP servers may appear idle when run directly because they wait
-    # for protocol messages from a client on stdin/stdout.
-    mcp.run()
-
-
-if __name__ == "__main__":
-    main()
+def register_tools(mcp: FastMCP) -> None:
+    mcp.tool()(get_server_capabilities)
+    mcp.tool()(list_clients)
+    mcp.tool()(get_sample_history)
+    mcp.tool()(get_prediction_input_sample)
+    mcp.tool()(predict_next_basket)
+    mcp.tool()(recommend_next_action)
+    mcp.tool()(get_account_reorder_brief)

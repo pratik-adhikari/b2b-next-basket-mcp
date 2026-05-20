@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from b2b_next_basket_mcp.inference import OrderPredictor
+from b2b_next_basket_mcp.backend.predictor import OrderPredictor
 
 
 def main() -> None:

@@ -44,3 +44,19 @@ def make_sales_recommendation(
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
         },
     }
+
+
+def _make_talking_points(
+    client_id: str,
+    readable_items: list[str],
+    time_prediction: str | None,
+) -> list[str]:
+    top_items = ", ".join(readable_items[:3]) if readable_items else "core replenishment needs"
+    talking_points = [
+        f"Open with a reorder check-in for account {client_id}.",
+        f"Lead with likely replenishment areas: {top_items}.",
+    ]
+    if time_prediction:
+        talking_points.append(f"Use the timing signal to frame urgency: {time_prediction}.")
+    talking_points.append("Keep the conversation recommendation-only until a human confirms next steps.")
+    return talking_points

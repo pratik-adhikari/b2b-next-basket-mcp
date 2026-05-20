@@ -39,6 +39,6 @@ if __name__ == "__main__":
     # behavior and exit immediately on Ctrl+C.
     signal.signal(signal.SIGINT, handle_sigint)
 
-    from b2b_next_basket_mcp.mcp_server import main
+    from b2b_next_basket_mcp.server import main
 
     main()

@@ -9,7 +9,7 @@ import joblib
 import numpy as np
 import onnxruntime as ort
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = PROJECT_ROOT / "data"
 VENDOR_DIR = PROJECT_ROOT / "vendor"
 
