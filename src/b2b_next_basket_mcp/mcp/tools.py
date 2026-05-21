@@ -12,6 +12,11 @@ from b2b_next_basket_mcp.business.evidence import (
     _make_model_signals,
     _make_reason_codes,
 )
+from b2b_next_basket_mcp.business.lead_ranking import (
+    make_lead_evidence_summary,
+    make_lead_limitations,
+    score_reorder_opportunity,
+)
 from b2b_next_basket_mcp.business.sales_brief import (
     _make_talking_points,
     make_sales_recommendation,
@@ -69,9 +74,14 @@ def get_server_capabilities() -> dict[str, Any]:
             "predict_next_basket",
             "recommend_next_action",
             "get_account_reorder_brief",
+            "get_top_reorder_leads",
             "get_server_capabilities",
         ],
         "recommended_sales_tool": "get_account_reorder_brief",
+        "sales_facing_tools": [
+            "get_account_reorder_brief",
+            "get_top_reorder_leads",
+        ],
         "safety_boundaries": {
             "recommendation_only": True,
             "no_automatic_customer_contact": True,
@@ -83,6 +93,7 @@ def get_server_capabilities() -> dict[str, Any]:
             "stdout is reserved for MCP protocol in stdio mode",
             "direct server run waits for an MCP client",
             "model loads lazily on first prediction-related tool call",
+            "Lead ranking uses demo heuristics over model outputs, not calibrated probability.",
         ],
     }
 
@@ -314,6 +325,118 @@ def get_account_reorder_brief(
     return debug_response
 
 
+def _safe_error_message(exc: Exception) -> str:
+    message = str(exc).strip() or type(exc).__name__
+    return message[:160]
+
+
+def get_top_reorder_leads(
+    limit: int = 10,
+    include_evidence: bool = True,
+    max_clients_to_scan: int = 30,
+) -> dict[str, Any]:
+    """Rank likely reorder leads with transparent demo heuristics over model outputs."""
+    if limit < 1 or limit > 25:
+        raise ValueError("limit must be between 1 and 25.")
+
+    predictor = get_predictor()
+    clients = predictor.list_clients()
+    max_scan_allowed = min(169, len(clients))
+    if max_clients_to_scan < 1 or max_clients_to_scan > max_scan_allowed:
+        raise ValueError(f"max_clients_to_scan must be between 1 and {max_scan_allowed}.")
+
+    clients_to_scan = clients[:max_clients_to_scan]
+    demo_client_id = "nexus_lab_solutions"
+    if demo_client_id in clients and demo_client_id not in clients_to_scan:
+        clients_to_scan.append(demo_client_id)
+
+    leads: list[dict[str, Any]] = []
+    skipped_clients: list[dict[str, str]] = []
+
+    for client_id in clients_to_scan:
+        try:
+            history = predictor.get_sample_history(client_id)
+            history_tokens = split_tokens(history)
+            history_preview = compact_token_preview(history)
+            prediction = predictor.predict_next_basket(
+                client_id=client_id,
+                start_text=history,
+                max_generate=DEFAULT_MAX_GENERATE,
+                temperature=DEFAULT_TEMPERATURE,
+                top_k=DEFAULT_TOP_K,
+            )
+            readable_items = readable_items_from_tokens(prediction["predicted_tokens"])
+            time_prediction = extract_time_prediction(prediction["predicted_tokens"])
+            score_details = score_reorder_opportunity(
+                readable_items=readable_items,
+                time_prediction=time_prediction,
+                history_token_count=len(history_tokens),
+                estimated_order_events=int(history_preview["estimated_order_events"]),
+            )
+            recommendation = make_sales_recommendation(
+                client_id=client_id,
+                readable_items=readable_items,
+                time_prediction=time_prediction,
+            )
+
+            lead: dict[str, Any] = {
+                "client_id": client_id,
+                "score": score_details["score"],
+                "expected_timing": time_prediction,
+                "likely_items": readable_items,
+                "recommended_action": recommendation["recommended_action"],
+                "reason_codes": score_details["reason_codes"],
+                "limitations": make_lead_limitations(),
+            }
+            if include_evidence:
+                lead["evidence_summary"] = make_lead_evidence_summary(
+                    client_id=client_id,
+                    score=score_details["score"],
+                    readable_items=readable_items,
+                    time_prediction=time_prediction,
+                    reason_codes=score_details["reason_codes"],
+                )
+                lead["scoring_notes"] = score_details["scoring_notes"]
+            else:
+                lead["evidence_summary"] = None
+            leads.append(lead)
+        except Exception as exc:  # pragma: no cover - defensive per-client isolation
+            skipped_clients.append(
+                {
+                    "client_id": client_id,
+                    "error": _safe_error_message(exc),
+                }
+            )
+
+    ranked_leads = [
+        {
+            "rank": index,
+            **lead,
+        }
+        for index, lead in enumerate(
+            sorted(leads, key=lambda lead: (-lead["score"], lead["client_id"]))[:limit],
+            start=1,
+        )
+    ]
+
+    return {
+        "ok": True,
+        "tool": "get_top_reorder_leads",
+        "requested_limit": limit,
+        "scanned_clients": len(clients_to_scan),
+        "returned_leads": len(ranked_leads),
+        "ranking_method": "demo_rule_based_over_model_outputs",
+        "leads": ranked_leads,
+        "skipped_clients": skipped_clients,
+        "safety": {
+            "recommendation_only": True,
+            "requires_human_approval": True,
+            "can_contact_customer_automatically": False,
+            "can_place_order_automatically": False,
+        },
+    }
+
+
 def register_tools(mcp: FastMCP) -> None:
     mcp.tool()(get_server_capabilities)
     mcp.tool()(list_clients)
@@ -322,3 +445,4 @@ def register_tools(mcp: FastMCP) -> None:
     mcp.tool()(predict_next_basket)
     mcp.tool()(recommend_next_action)
     mcp.tool()(get_account_reorder_brief)
+    mcp.tool()(get_top_reorder_leads)
