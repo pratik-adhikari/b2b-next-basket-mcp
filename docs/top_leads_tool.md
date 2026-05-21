@@ -8,6 +8,19 @@ Tell me the top 10 leads with reasoning.
 
 The local LLM should call this MCP tool for "top leads" or "best reorder opportunities" questions. The LLM should not rank customers itself. The MCP server ranks leads with a transparent demo heuristic over the existing backend/model outputs.
 
+Numeric `client_id` values are internal demo account IDs. They are not customer-ready account names.
+
+The tool adds sales-facing fields:
+
+- `display_name`: a safe generated demo label, such as `Lab Account 292` or `Grocery Account 27`
+- `segment`: a coarse segment inferred from predicted item tokens
+- `priority`: a simple high/medium/low label derived from the heuristic score
+- `recommended_next_step`: concise sales guidance for follow-up
+- `sales_talk_track`: short talking points for a human sales review
+- `data_source_note`: reminder to verify demo labels against CRM before customer contact
+
+In production, CRM integration would be needed for real account names, contact owners, territories, and approved outreach details.
+
 ## Ranking Method
 
 The tool scans a bounded set of demo clients, generates each client's next-basket prediction with the existing local backend, converts predicted tokens into readable items and timing, then scores the opportunity.
@@ -48,6 +61,8 @@ The response is recommendation-only:
   "ok": true,
   "tool": "get_top_reorder_leads",
   "requested_limit": 10,
+  "effective_limit": 10,
+  "max_allowed_limit": 25,
   "scanned_clients": 31,
   "returned_leads": 10,
   "ranking_method": "demo_rule_based_over_model_outputs",
@@ -55,10 +70,20 @@ The response is recommendation-only:
     {
       "rank": 1,
       "client_id": "nexus_lab_solutions",
+      "display_name": "Nexus Lab Solutions",
+      "segment": "lab supplies / scientific procurement",
+      "priority": "high",
       "score": 100,
       "expected_timing": "next order after 1 week(s)",
       "likely_items": ["solv acetone tech", "kimwipes large", "waste carboy 10"],
       "recommended_action": "Prepare a replenishment offer...",
+      "recommended_next_step": "Review Nexus Lab Solutions and prepare a replenishment proposal...",
+      "sales_talk_track": [
+        "Open with a reorder check-in for Nexus Lab Solutions.",
+        "Mention likely needs around solv acetone tech, kimwipes large, waste carboy 10 and timing signal: next order after 1 week(s).",
+        "Ask for human confirmation before any customer contact or order action."
+      ],
+      "data_source_note": "Demo account label inferred from local token patterns; verify against CRM before customer contact.",
       "reason_codes": [
         "TIMING_SIGNAL_PRESENT",
         "NEAR_TERM_REORDER_SIGNAL",

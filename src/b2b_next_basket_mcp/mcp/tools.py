@@ -5,6 +5,13 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from b2b_next_basket_mcp.backend.predictor import OrderPredictor
+from b2b_next_basket_mcp.business.account_display import (
+    infer_account_segment,
+    make_display_name,
+    make_priority_label,
+    make_recommended_next_step,
+    make_sales_talk_track,
+)
 from b2b_next_basket_mcp.business.evidence import (
     _generation_parameters_fallback,
     _make_evidence_summary,
@@ -336,8 +343,8 @@ def get_top_reorder_leads(
     max_clients_to_scan: int = 30,
 ) -> dict[str, Any]:
     """Rank likely reorder leads with transparent demo heuristics over model outputs."""
-    if limit < 1 or limit > 25:
-        raise ValueError("limit must be between 1 and 25.")
+    requested_limit = limit
+    effective_limit = max(1, min(25, int(limit)))
 
     predictor = get_predictor()
     clients = predictor.list_clients()
@@ -378,15 +385,36 @@ def get_top_reorder_leads(
                 readable_items=readable_items,
                 time_prediction=time_prediction,
             )
+            segment = infer_account_segment(readable_items)
+            display_name = make_display_name(client_id, segment)
+            priority = make_priority_label(score_details["score"], time_prediction)
 
             lead: dict[str, Any] = {
                 "client_id": client_id,
+                "display_name": display_name,
+                "segment": segment,
+                "priority": priority,
                 "score": score_details["score"],
                 "expected_timing": time_prediction,
                 "likely_items": readable_items,
                 "recommended_action": recommendation["recommended_action"],
+                "recommended_next_step": make_recommended_next_step(
+                    display_name=display_name,
+                    readable_items=readable_items,
+                    time_prediction=time_prediction,
+                    priority=priority,
+                ),
+                "sales_talk_track": make_sales_talk_track(
+                    display_name=display_name,
+                    readable_items=readable_items,
+                    time_prediction=time_prediction,
+                ),
                 "reason_codes": score_details["reason_codes"],
                 "limitations": make_lead_limitations(),
+                "data_source_note": (
+                    "Demo account label inferred from local token patterns; "
+                    "verify against CRM before customer contact."
+                ),
             }
             if include_evidence:
                 lead["evidence_summary"] = make_lead_evidence_summary(
@@ -414,7 +442,7 @@ def get_top_reorder_leads(
             **lead,
         }
         for index, lead in enumerate(
-            sorted(leads, key=lambda lead: (-lead["score"], lead["client_id"]))[:limit],
+            sorted(leads, key=lambda lead: (-lead["score"], lead["client_id"]))[:effective_limit],
             start=1,
         )
     ]
@@ -422,7 +450,9 @@ def get_top_reorder_leads(
     return {
         "ok": True,
         "tool": "get_top_reorder_leads",
-        "requested_limit": limit,
+        "requested_limit": requested_limit,
+        "effective_limit": effective_limit,
+        "max_allowed_limit": 25,
         "scanned_clients": len(clients_to_scan),
         "returned_leads": len(ranked_leads),
         "ranking_method": "demo_rule_based_over_model_outputs",
