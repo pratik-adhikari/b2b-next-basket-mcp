@@ -110,37 +110,38 @@ async def run_demo(client_id: str, show_json: bool) -> None:
         env=server_env,
     )
 
-    async with stdio_client(server_params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
+    with open(os.devnull, "w", encoding="utf-8") as server_errlog:
+        async with stdio_client(server_params, errlog=server_errlog) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
 
-            tools = await session.list_tools()
-            print("TOOLS")
-            print(f"available_tool_count: {len(tools.tools)}")
-            print("recommended_sales_tool: get_account_reorder_brief")
+                tools = await session.list_tools()
+                print("TOOLS")
+                print(f"available_tool_count: {len(tools.tools)}")
+                print("recommended_sales_tool: get_account_reorder_brief")
 
-            capabilities = await call_tool_payload(session, "get_server_capabilities", {})
-            print_capabilities(capabilities)
+                capabilities = await call_tool_payload(session, "get_server_capabilities", {})
+                print_capabilities(capabilities)
 
-            print_section("SALES QUESTION")
-            print(f'"Give me a reorder brief for {client_id}."')
+                print_section("SALES QUESTION")
+                print(f'"Give me a reorder brief for {client_id}."')
 
-            brief = await call_tool_payload(
-                session,
-                "get_account_reorder_brief",
-                {
-                    "client_id": client_id,
-                    "detail_level": "sales_summary",
-                    "include_raw_tokens": False,
-                    "include_evidence": True,
-                    "include_talking_points": True,
-                },
-            )
-            print_reorder_brief(brief)
+                brief = await call_tool_payload(
+                    session,
+                    "get_account_reorder_brief",
+                    {
+                        "client_id": client_id,
+                        "detail_level": "sales_summary",
+                        "include_raw_tokens": False,
+                        "include_evidence": True,
+                        "include_talking_points": True,
+                    },
+                )
+                print_reorder_brief(brief)
 
-            if show_json:
-                print_section("RAW JSON")
-                print(json.dumps(brief, indent=2))
+                if show_json:
+                    print_section("RAW JSON")
+                    print(json.dumps(brief, indent=2))
 
 
 def parse_args() -> argparse.Namespace:
