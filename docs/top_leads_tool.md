@@ -23,7 +23,18 @@ In production, CRM integration would be needed for real account names, contact o
 
 ## Ranking Method
 
-The tool scans a bounded set of demo clients, generates each client's next-basket prediction with the existing local backend, converts predicted tokens into readable items and timing, then scores the opportunity.
+The tool scans demo clients, generates each client's next-basket prediction with the existing local backend, converts predicted tokens into readable items and timing, then scores the opportunity.
+
+`limit` controls how many ranked leads are returned.
+
+`max_clients_to_scan` controls how many candidate accounts are evaluated when `scan_mode` is `limited`. The default is 30 for fast demos.
+
+`scan_mode` controls candidate coverage:
+
+- `limited`: evaluate the first `max_clients_to_scan` accounts, plus the known demo account when available. This is faster.
+- `all`: evaluate every available demo account. This gives a better "top leads across the dataset" view but can take longer.
+
+Use `scan_mode="all"` when the sales user can wait for a fuller ranking. Use `scan_mode="limited"` when speed matters during a live demo.
 
 The score is heuristic:
 
@@ -35,6 +46,22 @@ The score is heuristic:
 
 This is not a calibrated probability or confidence score.
 
+## Generation Settings
+
+`ranking_profile` gives sales-friendly defaults for the underlying model generation:
+
+- `conservative`: lower variation, smaller candidate set. Uses temperature 0.3, top_k 5, max_generate 20.
+- `balanced`: default tradeoff for demos. Uses temperature 0.7, top_k 10, max_generate 20.
+- `exploratory`: broader generation for discovery. Uses temperature 1.1, top_k 30, max_generate 30.
+
+Advanced callers can override the profile with explicit values:
+
+- `temperature`: controls generation variation. It is clamped between 0.1 and 2.0.
+- `top_k`: controls how many candidate tokens are considered. It is clamped between 1 and 100.
+- `max_generate`: controls generated sequence length. It is clamped between 1 and 50.
+
+The response includes requested and effective generation settings so users can see what was actually applied.
+
 ## Safety
 
 The response is recommendation-only:
@@ -42,7 +69,7 @@ The response is recommendation-only:
 - no automatic customer contact
 - no automatic order placement
 - human review is required before any customer action
-- no chain-of-thought is exposed
+- internal reasoning is not exposed; the tool returns reason codes, evidence summaries, limitations, and safety fields
 
 ## Example Input
 
@@ -50,7 +77,9 @@ The response is recommendation-only:
 {
   "limit": 10,
   "include_evidence": true,
-  "max_clients_to_scan": 30
+  "max_clients_to_scan": 30,
+  "scan_mode": "limited",
+  "ranking_profile": "balanced"
 }
 ```
 
@@ -63,9 +92,22 @@ The response is recommendation-only:
   "requested_limit": 10,
   "effective_limit": 10,
   "max_allowed_limit": 25,
+  "scan_mode": "limited",
+  "total_available_clients": 169,
   "scanned_clients": 31,
   "returned_leads": 10,
   "ranking_method": "demo_rule_based_over_model_outputs",
+  "generation_settings": {
+    "ranking_profile": "balanced",
+    "requested_ranking_profile": "balanced",
+    "requested_temperature": null,
+    "effective_temperature": 0.7,
+    "requested_top_k": null,
+    "effective_top_k": 10,
+    "requested_max_generate": null,
+    "effective_max_generate": 20
+  },
+  "runtime_note": "Limited scan evaluated a subset of available demo accounts for faster response.",
   "leads": [
     {
       "rank": 1,

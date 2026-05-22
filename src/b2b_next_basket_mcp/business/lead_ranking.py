@@ -12,6 +12,74 @@ NEAR_TERM_REORDER_PHRASES = (
     "next order after 1 week",
 )
 
+RANKING_PROFILES = {
+    "conservative": {
+        "temperature": 0.3,
+        "top_k": 5,
+        "max_generate": 20,
+    },
+    "balanced": {
+        "temperature": 0.7,
+        "top_k": 10,
+        "max_generate": 20,
+    },
+    "exploratory": {
+        "temperature": 1.1,
+        "top_k": 30,
+        "max_generate": 30,
+    },
+}
+
+
+def _clamp_float(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
+
+
+def _clamp_int(value: int, minimum: int, maximum: int) -> int:
+    return max(minimum, min(maximum, value))
+
+
+def resolve_generation_settings(
+    ranking_profile: str = "balanced",
+    temperature: float | None = None,
+    top_k: int | None = None,
+    max_generate: int | None = None,
+) -> dict:
+    requested_profile = ranking_profile
+    effective_profile = ranking_profile if ranking_profile in RANKING_PROFILES else "balanced"
+    profile_defaults = RANKING_PROFILES[effective_profile]
+
+    requested_temperature = temperature
+    requested_top_k = top_k
+    requested_max_generate = max_generate
+
+    effective_temperature = _clamp_float(
+        float(temperature if temperature is not None else profile_defaults["temperature"]),
+        0.1,
+        2.0,
+    )
+    effective_top_k = _clamp_int(
+        int(top_k if top_k is not None else profile_defaults["top_k"]),
+        1,
+        100,
+    )
+    effective_max_generate = _clamp_int(
+        int(max_generate if max_generate is not None else profile_defaults["max_generate"]),
+        1,
+        50,
+    )
+
+    return {
+        "ranking_profile": effective_profile,
+        "requested_ranking_profile": requested_profile,
+        "requested_temperature": requested_temperature,
+        "effective_temperature": effective_temperature,
+        "requested_top_k": requested_top_k,
+        "effective_top_k": effective_top_k,
+        "requested_max_generate": requested_max_generate,
+        "effective_max_generate": effective_max_generate,
+    }
+
 
 def score_reorder_opportunity(
     readable_items: list[str],

@@ -22,6 +22,7 @@ from b2b_next_basket_mcp.business.evidence import (
 from b2b_next_basket_mcp.business.lead_ranking import (
     make_lead_evidence_summary,
     make_lead_limitations,
+    resolve_generation_settings,
     score_reorder_opportunity,
 )
 from b2b_next_basket_mcp.business.sales_brief import (
@@ -341,21 +342,43 @@ def get_top_reorder_leads(
     limit: int = 10,
     include_evidence: bool = True,
     max_clients_to_scan: int = 30,
+    scan_mode: str = "limited",
+    ranking_profile: str = "balanced",
+    temperature: float | None = None,
+    top_k: int | None = None,
+    max_generate: int | None = None,
 ) -> dict[str, Any]:
     """Rank likely reorder leads with transparent demo heuristics over model outputs."""
     requested_limit = limit
     effective_limit = max(1, min(25, int(limit)))
+    requested_scan_mode = scan_mode
+    effective_scan_mode = scan_mode if scan_mode in {"limited", "all"} else "limited"
+    generation_settings = resolve_generation_settings(
+        ranking_profile=ranking_profile,
+        temperature=temperature,
+        top_k=top_k,
+        max_generate=max_generate,
+    )
 
     predictor = get_predictor()
     clients = predictor.list_clients()
-    max_scan_allowed = min(169, len(clients))
-    if max_clients_to_scan < 1 or max_clients_to_scan > max_scan_allowed:
-        raise ValueError(f"max_clients_to_scan must be between 1 and {max_scan_allowed}.")
+    total_available_clients = len(clients)
+    max_scan_allowed = min(169, total_available_clients)
+    effective_max_clients_to_scan = max(1, min(max_scan_allowed, int(max_clients_to_scan)))
 
-    clients_to_scan = clients[:max_clients_to_scan]
+    if effective_scan_mode == "all":
+        clients_to_scan = list(clients)
+    else:
+        clients_to_scan = clients[:effective_max_clients_to_scan]
     demo_client_id = "nexus_lab_solutions"
     if demo_client_id in clients and demo_client_id not in clients_to_scan:
         clients_to_scan.append(demo_client_id)
+
+    runtime_note = (
+        "Full scan evaluated all available demo accounts and may take longer."
+        if effective_scan_mode == "all"
+        else "Limited scan evaluated a subset of available demo accounts for faster response."
+    )
 
     leads: list[dict[str, Any]] = []
     skipped_clients: list[dict[str, str]] = []
@@ -368,9 +391,9 @@ def get_top_reorder_leads(
             prediction = predictor.predict_next_basket(
                 client_id=client_id,
                 start_text=history,
-                max_generate=DEFAULT_MAX_GENERATE,
-                temperature=DEFAULT_TEMPERATURE,
-                top_k=DEFAULT_TOP_K,
+                max_generate=generation_settings["effective_max_generate"],
+                temperature=generation_settings["effective_temperature"],
+                top_k=generation_settings["effective_top_k"],
             )
             readable_items = readable_items_from_tokens(prediction["predicted_tokens"])
             time_prediction = extract_time_prediction(prediction["predicted_tokens"])
@@ -453,9 +476,16 @@ def get_top_reorder_leads(
         "requested_limit": requested_limit,
         "effective_limit": effective_limit,
         "max_allowed_limit": 25,
+        "scan_mode": effective_scan_mode,
+        "requested_scan_mode": requested_scan_mode,
+        "requested_max_clients_to_scan": max_clients_to_scan,
+        "effective_max_clients_to_scan": effective_max_clients_to_scan,
+        "total_available_clients": total_available_clients,
         "scanned_clients": len(clients_to_scan),
         "returned_leads": len(ranked_leads),
         "ranking_method": "demo_rule_based_over_model_outputs",
+        "generation_settings": generation_settings,
+        "runtime_note": runtime_note,
         "leads": ranked_leads,
         "skipped_clients": skipped_clients,
         "safety": {

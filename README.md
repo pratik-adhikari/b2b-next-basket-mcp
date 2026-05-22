@@ -66,7 +66,7 @@ classDiagram
 | `predict_next_basket` | Generate lower-level model prediction output. | developer | no |
 | `recommend_next_action` | Wrap a prediction as a safe next-action recommendation. | developer, demo | yes |
 | `get_account_reorder_brief` | Produce a sales-ready reorder brief for one account. | sales, demo | yes |
-| `get_top_reorder_leads` | Rank reorder leads using demo heuristics over model outputs. | sales, demo | yes |
+| `get_top_reorder_leads` | Rank reorder leads using demo heuristics over model outputs. Supports limited or all-client scans and conservative/balanced/exploratory generation profiles. | sales, demo | yes |
 
 ## Local Assets
 
