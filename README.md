@@ -1,42 +1,94 @@
 # B2B Next-Basket MCP Demo
 
-A neutral, NDA-safe demo project showing how to expose a B2B next-basket/order-prediction backend through an MCP server.
+A public, NDA-safe demo that exposes a local B2B next-basket prediction backend through an MCP server.
 
-The repository is designed so the public code can be uploaded to GitHub while proprietary model/data/backend files remain local.
+## What This Project Demonstrates
+
+- Local prediction backend wrapped as MCP tools.
+- Stdio MCP server for local MCP clients.
+- Streamable HTTP MCP server for optional visual clients.
+- Sales-facing tools for account briefs and ranked reorder leads.
+- Proprietary assets are kept local and excluded from Git.
 
 ## Architecture
 
 ```text
-AI / MCP Client
-  ↓ MCP tool call
-MCP Server
-  ↓ clean Python wrapper
-ONNX next-basket prediction backend
-  ↓
-Predicted products + safe business recommendation
+Client
+    |
+    v
+MCP server
+    |
+    v
+Python tool layer
+    |
+    v
+OrderPredictor
+    |
+    +-- dataset.joblib
+    +-- model.onnx
+    +-- protected backend
 ```
 
-## MCP tools
+```mermaid
+classDiagram
+    class MCPServer {
+        register_tools()
+        register_resources()
+    }
+    class MCPTools {
+        list_clients()
+        get_top_reorder_leads()
+        get_account_reorder_brief()
+    }
+    class OrderPredictor {
+        list_clients()
+        get_sample_history()
+        predict_next_basket()
+    }
+    class BusinessLayer {
+        sales_brief()
+        lead_ranking()
+        safety()
+    }
+    MCPServer --> MCPTools
+    MCPTools --> OrderPredictor
+    MCPTools --> BusinessLayer
+```
 
-- `list_clients(limit=20)`
-- `get_sample_history(client_id)`
-- `predict_next_basket(client_id, start_text, max_generate=30, temperature=1.0, top_k=20)`
-- `recommend_next_action(client_id, start_text, max_generate=30, temperature=1.0, top_k=20)`
+## MCP Tools
 
-## NDA note
+| Tool | Purpose | Audience | Sales-facing |
+| --- | --- | --- | --- |
+| `get_server_capabilities` | Describe server defaults, tools, and safety boundaries. | developer, demo | no |
+| `list_clients` | List available local demo account IDs. | developer, demo | no |
+| `get_sample_history` | Return a compact account-history preview. | developer, demo | no |
+| `get_prediction_input_sample` | Return full prediction input for local development. | developer | no |
+| `predict_next_basket` | Generate lower-level model prediction output. | developer | no |
+| `recommend_next_action` | Wrap a prediction as a safe next-action recommendation. | developer, demo | yes |
+| `get_account_reorder_brief` | Produce a sales-ready reorder brief for one account. | sales, demo | yes |
+| `get_top_reorder_leads` | Rank reorder leads using demo heuristics over model outputs. | sales, demo | yes |
 
-This repo intentionally does **not** include proprietary model/data/protected backend files.
+## Local Assets
 
-Place the provided files locally like this:
+This repository does not include proprietary model, data, or protected backend files.
+
+Expected local files:
 
 ```text
 data/model.onnx
 data/dataset.joblib
 vendor/protected_backend.py
 vendor/protected_runtime/
+vendor/pyarmor_runtime_000000/
 ```
 
-Do not commit `data/` or `vendor/` to GitHub.
+Do not commit `data/`, `vendor/`, `*.onnx`, `*.joblib`, or local export folders.
+
+To prepare local assets from the original package:
+
+```bash
+python scripts/prepare_local_assets.py "/path/to/extracted/Public Hackathon (NDA required)"
+```
 
 ## Setup
 
@@ -44,86 +96,82 @@ Use Python 3.11.
 
 ```bash
 python3.11 -m venv .venv
-```
-
-Creates a project-local Python virtual environment.
-
-```bash
 source .venv/bin/activate
-```
-
-Activates the virtual environment in your current shell.
-
-```bash
 pip install --upgrade pip
-```
-
-Updates Python's package installer inside the virtual environment.
-
-```bash
 pip install -r requirements.txt
 ```
 
-Installs NumPy, ONNX Runtime, Joblib, and the MCP Python SDK.
+## Run MCP Servers
 
-## Prepare local proprietary files
-
-After extracting the original provided hackathon package somewhere on your machine, run:
-
-```bash
-python scripts/prepare_local_assets.py "/path/to/extracted/Public Hackathon (NDA required)"
-```
-
-Copies and renames the protected model/data/backend files into neutral local paths.
-
-On Linux, if the protected backend import fails because of a wrong binary format, the script also tries to copy the Linux runtime into the expected root runtime location.
-
-## Run normal Python demo first
-
-```bash
-PYTHONPATH=src python scripts/demo_without_mcp.py
-```
-
-Runs the prediction backend through normal Python functions. This should work before testing MCP.
-
-## Run the MCP server
+Stdio server:
 
 ```bash
 PYTHONPATH=src python scripts/run_mcp_server.py
 ```
 
-Starts the MCP server over stdio and prints a short human-readable status banner to `stderr` during manual direct runs. Standard output remains reserved for MCP protocol traffic. The server waits for MCP client JSON-RPC messages on stdin/stdout, so appearing idle is normal until a client connects. The model is loaded lazily on the first tool call, not when the server module is imported. Direct server runs are mainly useful for MCP host integration or low-level debugging; for normal testing, use `scripts/mcp_dev_client.py`. The dev client suppresses the direct-run banner in its server subprocess to keep client output clean. Press `Ctrl+C` once to stop a direct run. The wrapper uses a forced exit to avoid stdin background-thread shutdown noise from the stdio runtime.
-
-## Test with a small MCP client
-
-Open another terminal from the same project root:
+Streamable HTTP server:
 
 ```bash
-source .venv/bin/activate
+PYTHONPATH=src python scripts/run_mcp_http_server.py
 ```
 
-Activates the same virtual environment.
+Default local HTTP endpoint:
+
+```text
+http://127.0.0.1:8010/mcp
+```
+
+## Smoke Tests
 
 ```bash
 PYTHONPATH=src python scripts/mcp_dev_client.py
-```
-
-Starts the MCP server as a subprocess, lists tools, calls `list_clients`, then calls a prediction/recommendation flow.
-
-## Sales demo client
-
-```bash
 PYTHONPATH=src python scripts/mcp_sales_demo_client.py
+PYTHONPATH=src python scripts/mcp_http_smoke_client.py
+PYTHONPATH=src python scripts/test_top_leads_tool.py
 ```
 
-Runs a short pitch-friendly MCP demo that calls the sales-facing `get_account_reorder_brief` tool and prints only the readable account brief.
+## Optional n8n Visual Demo
 
-## First-principles lesson
+The separate sibling project `b2b-next-basket-n8n-demo` contains visual n8n workflows that call this MCP server over streamable HTTP. This repository does not require n8n to run the MCP server.
 
-The prediction model is not the product interface.
+Recommended no-AI workflow in the sibling project:
 
 ```text
-Model backend = computes prediction
-MCP server = exposes safe, typed, agent-callable tools
-LLM/client = chooses and calls tools, then explains results
+../b2b-next-basket-n8n-demo/workflows/b2b_next_basket_mcp_capability_explorer.workflow.json
 ```
+
+The exact n8n-facing MCP URL depends on the local Docker networking setup. In my current rootless-Docker demo setup, the proxied URL is:
+
+```text
+http://172.19.0.1:18010/mcp
+```
+
+The Ollama workflow is an optional extension. The MCP capability explorer does not require OpenAI or Ollama.
+
+## Dataset and Account Identity
+
+- The demo dataset has 169 account records.
+- Most account names are numeric IDs.
+- Safe display labels are generated for demo readability.
+- Production use needs CRM or ERP metadata mapping.
+
+## Safety Notes
+
+- Tool output is recommendation-only.
+- No tool places orders or contacts customers automatically.
+- No calibrated confidence score is claimed.
+- Internal reasoning is not exposed; tools return reason codes, evidence summaries, limitations, and safety fields.
+- Demo display names are safe labels, not CRM-verified company names.
+- Production use would require CRM or ERP account metadata, permissions, ownership, audit logging, and review workflows.
+
+## Git Hygiene
+
+Do not commit:
+
+- `data/`
+- `vendor/`
+- `dataset_export/`
+- local screenshots
+- Playwright artifacts
+- `*.onnx`
+- `*.joblib`
